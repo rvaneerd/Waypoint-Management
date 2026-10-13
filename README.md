@@ -30,6 +30,8 @@ docker network create shared_wp_net
 
 Create `.env` in the project root and set the database credentials and deployment settings. Compose reads `.env` and passes the same values to the app. The real `.env` is ignored by Git; do not commit credentials.
 
+Set `SUCCESS_TOAST_DURATION_MS` in `.env` to configure how long the waypoint-save confirmation remains visible (milliseconds; default `1000`).
+
 Start or rebuild the application:
 
 ```sh

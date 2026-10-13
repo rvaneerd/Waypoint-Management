@@ -6,6 +6,8 @@ const waypointModel = require("../database/models/waypoint");
 const zipExporter = require("../export/zip-export");
 
 const app = express();
+const configuredToastDuration = Number(process.env.SUCCESS_TOAST_DURATION_MS);
+const successToastDurationMs = Number.isInteger(configuredToastDuration) && configuredToastDuration >= 0 ? configuredToastDuration : 1000;
 
 // Middleware
 app.use(express.json());
@@ -37,6 +39,8 @@ app.get("/", async (req, res) => {
           table { width: 100%; border-collapse: collapse; margin-top: 20px; }
           th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
           th { background-color: #f2f2f2; }
+          .success-toast { position: fixed; left: 50%; bottom: 20px; z-index: 1000; padding: 12px 18px; color: #fff; background: #167c5a; border-radius: 4px; opacity: 0; visibility: hidden; transform: translate(-50%, 8px); transition: opacity 150ms, transform 150ms, visibility 150ms; }
+          .success-toast.is-visible { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
           @media (max-width: 520px) { .coordinate-row { grid-template-columns: 1fr; } }
         </style>
       </head>
@@ -150,8 +154,22 @@ app.get("/", async (req, res) => {
           <h2>Export Waypoints</h2>
           <button onclick="exportToZip()">Export as ZIP (Topo GPS)</button>
         </div>
+
+        <div id="successToast" class="success-toast" role="status" aria-live="polite"></div>
         
         <script>
+          const successToastDurationMs = ${successToastDurationMs};
+
+          function showSuccessToast(message, onDismiss) {
+            const toast = document.getElementById('successToast');
+            toast.textContent = message;
+            toast.classList.add('is-visible');
+            window.setTimeout(() => {
+              toast.classList.remove('is-visible');
+              if (onDismiss) onDismiss();
+            }, successToastDurationMs);
+          }
+
           const locationSelect = document.getElementById('location_hierarchy_id');
           const waypointTypeSelect = document.getElementById('waypoint_type');
           const latitudeInput = document.getElementById('latitude');
@@ -237,15 +255,13 @@ app.get("/", async (req, res) => {
               });
               
               if (response.ok) {
-                alert('Waypoint added successfully!');
+                showSuccessToast('Waypoint added successfully!', () => window.location.reload());
                 this.reset();
                 updateLocationAvailability();
                 locationSelect.value = selectedLocationId;
                 if (selectedLocationId) {
                   localStorage.setItem('waypoint-last-location', selectedLocationId);
                 }
-                // Refresh page to show new waypoint
-                window.location.reload();
               } else {
                 const error = await response.json();
                 alert('Error: ' + error.message);
