@@ -48,16 +48,29 @@ docker compose down
 
 ### Source files and dependencies
 
-Compose bind-mounts the project folder on the Mac to `/app` in the container. Source edits are therefore immediately present in the container. The app runs with `node index.js`, which does not automatically reload changed code; restart it after code edits:
+Compose bind-mounts the project folder on the Mac to `/app` in the container. Edit the files in the Mac project folder; those changes are immediately visible inside the container. The app runs with `node index.js`, which does not automatically reload changed code. After editing application source files such as `.js`, restart the app:
 
 ```sh
 docker compose restart waypoint-app
 ```
 
-`node_modules` is kept in a separate container volume. If `package.json` or `package-lock.json` changes, rebuild the image and renew that volume so dependencies are refreshed:
+No image rebuild is needed for ordinary source-code edits. After the restart, check that the container is running and inspect startup errors with:
+
+```sh
+docker compose ps
+docker compose logs --tail=50 waypoint-app
+```
+
+If `package.json` or `package-lock.json` changes, rebuild the image and renew the separate `node_modules` volume so the new dependencies are installed:
 
 ```sh
 docker compose up -d --build --force-recreate --renew-anon-volumes waypoint-app
+```
+
+If `Dockerfile`, `docker-compose.yml`, or Docker-related `.env` settings change, recreate the app so the updated build or Compose configuration is applied:
+
+```sh
+docker compose up -d --build --force-recreate waypoint-app
 ```
 
 ## Run locally without Docker
@@ -92,6 +105,8 @@ Existing tables are not migrated by `CREATE TABLE IF NOT EXISTS`. Back up the da
 ## Web interface and API
 
 The home page lets you add waypoints, create top-level or nested locations, browse waypoints, and download a ZIP export. The selected location is remembered in browser `localStorage`.
+
+The export ZIP encodes the location hierarchy as nested folders and names each location CSV after its leaf folder, for example `De Mooiste Fotolocaties/België.csv`. This avoids an extra `waypoints` subfolder during import. Import the ZIP itself into Topo GPS without extracting it; Topo GPS preserves folders found inside an imported ZIP. Waypoints without a location are placed in a root-level `waypoints.csv`. The archive also includes `waypoints.json` as a data copy and a `README.txt`.
 
 | Method   | Endpoint               | Purpose                                                                                    |
 | -------- | ---------------------- | ------------------------------------------------------------------------------------------ |
