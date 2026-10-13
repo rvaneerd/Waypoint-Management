@@ -1,0 +1,25 @@
+{
+  "name": "waypoint-management",
+  "version": "1.0.0",
+  "description": "Waypoint management system for GPS coordinates with Topo GPS export",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "init": "node src/database/init.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "jszip": "^3.10.1",
+    "mysql2": "^3.6.0",
+    "zip-stream": "^5.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^1.14.10"
+  },
+  "allowScripts": {
+    "fsevents@1.2.13": true,
+    "nodemon@1.14.10": true
+  }
+}

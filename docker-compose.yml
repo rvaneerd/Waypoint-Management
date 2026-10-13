@@ -1,0 +1,24 @@
+# version: '3.8'
+
+services:
+  waypoint-app:
+    build:
+      context: .
+      args:
+        PORT: ${PORT:?Set PORT in .env}
+    container_name: ${CONTAINER_NAME:?Set CONTAINER_NAME in .env}
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:?Set HOST_PORT in .env}:${PORT:?Set PORT in .env}"
+    networks:
+      - shared_wp_net
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - /app/node_modules
+
+networks:
+  shared_wp_net:
+    external: true
+    name: ${DOCKER_NETWORK:?Set DOCKER_NETWORK in .env}
