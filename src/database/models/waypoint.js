@@ -1,16 +1,18 @@
 // Waypoint model for managing GPS coordinates and related data
 
 const db = require("../connection");
+const waypointTypes = new Set(["standard", "photolocation", "parking"]);
 
 class Waypoint {
   constructor() {
     this.table = "waypoints";
     this.hierarchyTable = "location_hierarchies";
+    this.metadataTable = "waypoint_metadata";
   }
 
   // Create a new waypoint
   async create(waypointData) {
-    const { name, latitude, longitude, description, reference_url, location_hierarchy_id } = waypointData;
+    const { name, latitude, longitude, description, reference_url, location_hierarchy_id, waypoint_type = "standard" } = waypointData;
 
     if (!name || !latitude || !longitude) {
       throw new Error("Name, latitude, and longitude are required");
@@ -24,6 +26,9 @@ class Waypoint {
     if (longitude < -180 || longitude > 180) {
       throw new Error("Invalid longitude value");
     }
+    if (!waypointTypes.has(waypoint_type)) {
+      throw new Error("Invalid waypoint type");
+    }
 
     const sql = `
       INSERT INTO ${this.table} 
@@ -33,7 +38,13 @@ class Waypoint {
 
     try {
       const result = await db.query(sql, [name, latitude, longitude, description, reference_url, location_hierarchy_id]);
-      return { id: result.insertId, ...waypointData };
+      if (waypoint_type !== "standard") {
+        await db.query(`INSERT INTO ${this.metadataTable} (waypoint_id, meta_key, meta_value) VALUES (?, 'waypoint_type', ?)`, [
+          result.insertId,
+          waypoint_type,
+        ]);
+      }
+      return { id: result.insertId, ...waypointData, waypoint_type };
     } catch (error) {
       throw new Error(`Failed to create waypoint: ${error.message}`);
     }
@@ -42,7 +53,12 @@ class Waypoint {
   // Get all waypoints
   async getAll(limit = 100, offset = 0) {
     const sql = `
-      SELECT w.*, h.name as location_name 
+      SELECT w.*, h.name as location_name,
+        COALESCE((
+          SELECT m.meta_value FROM ${this.metadataTable} m
+          WHERE m.waypoint_id = w.id AND m.meta_key = 'waypoint_type'
+          ORDER BY m.id DESC LIMIT 1
+        ), 'standard') as waypoint_type
       FROM ${this.table} w
       LEFT JOIN ${this.hierarchyTable} h ON w.location_hierarchy_id = h.id
       ORDER BY w.created_at DESC
@@ -60,7 +76,12 @@ class Waypoint {
   // Get waypoint by ID
   async getById(id) {
     const sql = `
-      SELECT w.*, h.name as location_name 
+      SELECT w.*, h.name as location_name,
+        COALESCE((
+          SELECT m.meta_value FROM ${this.metadataTable} m
+          WHERE m.waypoint_id = w.id AND m.meta_key = 'waypoint_type'
+          ORDER BY m.id DESC LIMIT 1
+        ), 'standard') as waypoint_type
       FROM ${this.table} w
       LEFT JOIN ${this.hierarchyTable} h ON w.location_hierarchy_id = h.id
       WHERE w.id = ?
@@ -76,7 +97,10 @@ class Waypoint {
 
   // Update waypoint
   async update(id, waypointData) {
-    const { name, latitude, longitude, description, reference_url, location_hierarchy_id } = waypointData;
+    const { name, latitude, longitude, description, reference_url, location_hierarchy_id, waypoint_type } = waypointData;
+    if (waypoint_type != null && !waypointTypes.has(waypoint_type)) {
+      throw new Error("Invalid waypoint type");
+    }
 
     const sql = `
       UPDATE ${this.table} 
@@ -86,9 +110,38 @@ class Waypoint {
 
     try {
       await db.query(sql, [name, latitude, longitude, description, reference_url, location_hierarchy_id, id]);
+      if (waypoint_type != null) {
+        await this.updateWaypointType(id, waypoint_type);
+      }
       return this.getById(id);
     } catch (error) {
       throw new Error(`Failed to update waypoint: ${error.message}`);
+    }
+  }
+
+  async updateWaypointType(id, waypointType) {
+    if (!waypointTypes.has(waypointType)) {
+      throw new Error("Invalid waypoint type");
+    }
+
+    try {
+      const waypointRows = await db.query(`SELECT id FROM ${this.table} WHERE id = ?`, [id]);
+      if (waypointRows.length === 0) {
+        return null;
+      }
+
+      const metadataRows = await db.query(
+        `SELECT id FROM ${this.metadataTable} WHERE waypoint_id = ? AND meta_key = 'waypoint_type' ORDER BY id DESC LIMIT 1`,
+        [id],
+      );
+      if (metadataRows.length > 0) {
+        await db.query(`UPDATE ${this.metadataTable} SET meta_value = ? WHERE id = ?`, [waypointType, metadataRows[0].id]);
+      } else {
+        await db.query(`INSERT INTO ${this.metadataTable} (waypoint_id, meta_key, meta_value) VALUES (?, 'waypoint_type', ?)`, [id, waypointType]);
+      }
+      return this.getById(id);
+    } catch (error) {
+      throw new Error(`Failed to update waypoint type: ${error.message}`);
     }
   }
 

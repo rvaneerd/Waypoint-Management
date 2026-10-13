@@ -1,8 +1,8 @@
 // Database connection manager for waypoint management system
 
-const mysql = require('mysql2');
-const config = require('./config');
-const schema = require('./schema');
+const mysql = require("mysql2");
+const config = require("./config");
+const schema = require("./schema");
 
 class DatabaseConnection {
   constructor() {
@@ -18,20 +18,19 @@ class DatabaseConnection {
         user: config.database.user,
         password: config.database.password,
         database: config.database.database,
-        connectionLimit: config.database.connectionLimit
+        connectionLimit: config.database.connectionLimit,
       });
-      
+
       // Test the connection
       this.connection.connect((err) => {
         if (err) {
-          console.error('Database connection failed:', err);
+          console.error("Database connection failed:", err);
           throw err;
         }
-        console.log('Connected to SharedDB at ' + config.database.host);
+        console.log("Connected to SharedDB at " + config.database.host);
       });
-      
     } catch (error) {
-      console.error('Failed to initialize database connection:', error);
+      console.error("Failed to initialize database connection:", error);
       throw error;
     }
   }
@@ -63,9 +62,10 @@ class DatabaseConnection {
       for (const statement of schema) {
         await this.query(statement);
       }
-      console.log('Database initialized successfully');
+
+      console.log("Database initialized successfully");
     } catch (error) {
-      console.error('Failed to initialize database:', error);
+      console.error("Failed to initialize database:", error);
       throw error;
     }
   }

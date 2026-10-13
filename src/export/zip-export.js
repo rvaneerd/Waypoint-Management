@@ -3,8 +3,34 @@
 const fs = require("fs");
 const path = require("path");
 const JSZip = require("jszip");
-function csvField(value) {
-  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+const topoGpsNamespace = "http://www.topo-gps.com/xmlschemas/TopoGPSExtension/v2";
+const topoGpsStyles = {
+  parking: {
+    id: 1,
+    symbol: "parking",
+    fillColor: "#e6add8e6",
+    strokeColor: "#ff073843",
+  },
+  photolocation: {
+    id: 2,
+    symbol: "attraction",
+    fillColor: "#e6add8e6",
+    strokeColor: "#ff073843",
+  },
+};
+
+function xmlEscape(value) {
+  return String(value ?? "").replace(
+    /[<>&"']/g,
+    (character) =>
+      ({
+        "<": "&lt;",
+        ">": "&gt;",
+        "&": "&amp;",
+        '"': "&quot;",
+        "'": "&apos;",
+      })[character],
+  );
 }
 
 function safeFolderName(name, id) {
@@ -29,12 +55,31 @@ function hierarchyFolderPath(hierarchyId, hierarchyById) {
   return pathSegments.join("/");
 }
 
-function waypointsToCsv(waypoints) {
-  const rows = ["Name,Latitude,Longitude,Description,Reference URL"];
-  for (const waypoint of waypoints) {
-    rows.push([csvField(waypoint.name), waypoint.latitude, waypoint.longitude, csvField(waypoint.description), csvField(waypoint.reference_url)].join(","));
-  }
-  return `${rows.join("\r\n")}\r\n`;
+function waypointsToGpx(waypoints) {
+  const usedTypes = new Set(waypoints.map((waypoint) => waypoint.waypoint_type));
+  const styles = Object.entries(topoGpsStyles).filter(([type]) => usedTypes.has(type));
+  const metadata =
+    styles.length > 0
+      ? `<metadata><name>Waypoint Export</name><extensions>${styles.map(([type, style]) => `<topogps:wptStyle id="${style.id}"><topogps:icon><topogps:type>circle</topogps:type><topogps:size>large</topogps:size><topogps:fillColor>${style.fillColor}</topogps:fillColor><topogps:strokeColor>${style.strokeColor}</topogps:strokeColor><topogps:symbol>${style.symbol}</topogps:symbol></topogps:icon></topogps:wptStyle>`).join("")}</extensions></metadata>`
+      : "";
+
+  const points = waypoints
+    .map((waypoint) => {
+      const style = topoGpsStyles[waypoint.waypoint_type];
+      const fields = [
+        `<name>${xmlEscape(waypoint.name)}</name>`,
+        waypoint.description ? `<desc>${xmlEscape(waypoint.description)}</desc>` : "",
+        waypoint.reference_url ? `<url>${xmlEscape(waypoint.reference_url)}</url>` : "",
+        waypoint.waypoint_type ? `<type>${xmlEscape(waypoint.waypoint_type)}</type>` : "",
+        style ? `<extensions><topogps:wptStyleID>${style.id}</topogps:wptStyleID></extensions>` : "",
+      ]
+        .filter(Boolean)
+        .join("");
+      return `<wpt lat="${xmlEscape(waypoint.latitude)}" lon="${xmlEscape(waypoint.longitude)}">${fields}</wpt>`;
+    })
+    .join("");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:topogps="${topoGpsNamespace}" version="1.1" creator="Waypoint Management" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.topo-gps.com/xmlschemas/TopoGPSExtension/v3 http://www.topo-gps.com/xmlschemas/TopoGPSExtensionv3.xsd">${metadata}${points}</gpx>`;
 }
 
 async function buildZipBuffer(waypoints, hierarchies) {
@@ -58,9 +103,9 @@ async function buildZipBuffer(waypoints, hierarchies) {
     const segments = folderPath.split("/").filter(Boolean);
     const locationName = segments.pop();
     const parentPath = segments.join("/");
-    const csvName = locationName ? `${locationName}.csv` : "waypoints.csv";
-    const csvPath = parentPath ? `${parentPath}/${csvName}` : csvName;
-    zip.file(csvPath, waypointsToCsv(folderWaypoints));
+    const fileName = locationName ? `${locationName}.gpx` : "waypoints.gpx";
+    const filePath = parentPath ? `${parentPath}/${fileName}` : fileName;
+    zip.file(filePath, waypointsToGpx(folderWaypoints));
   }
 
   zip.file("waypoints.json", JSON.stringify(waypoints, null, 2));
@@ -71,10 +116,11 @@ async function buildZipBuffer(waypoints, hierarchies) {
 Generated on: ${new Date().toISOString()}
 Total waypoints: ${waypoints.length}
 
-CSV files are placed in folders matching the location hierarchy.
+GPX files carry the waypoint icon symbols and type labels.
+Files are placed in folders matching the location hierarchy.
 Import this ZIP archive directly into Topo GPS without extracting it to preserve the folder structure.
 
-Each CSV contains: Name, Latitude, Longitude, Description, Reference URL.
+Photolocations use the Topo GPS attraction icon; parking places use the parking icon.
 `,
   );
 

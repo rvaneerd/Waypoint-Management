@@ -71,6 +71,15 @@ app.get("/", async (req, res) => {
               <label for="reference_url">Reference URL:</label>
               <input type="url" id="reference_url" name="reference_url">
             </div>
+
+            <div class="form-group">
+              <label for="waypoint_type">Waypoint type:</label>
+              <select id="waypoint_type" name="waypoint_type">
+                <option value="standard">Standard</option>
+                <option value="photolocation">Photolocation</option>
+                <option value="parking">Parking place</option>
+              </select>
+            </div>
             
             <div class="form-group">
               <label for="location_hierarchy_id">Location Hierarchy:</label>
@@ -107,6 +116,7 @@ app.get("/", async (req, res) => {
                 <th>Latitude</th>
                 <th>Longitude</th>
                 <th>Description</th>
+                <th>Type</th>
                 <th>Location</th>
                 <th>Date</th>
                 <th>Action</th>
@@ -121,6 +131,13 @@ app.get("/", async (req, res) => {
                   <td>${w.latitude}</td>
                   <td>${w.longitude}</td>
                   <td>${w.description || ""}</td>
+                  <td>
+                    <select aria-label="Type for ${w.name}" onchange="updateWaypointType(${w.id}, this.value)">
+                      <option value="standard" ${w.waypoint_type === "standard" ? "selected" : ""}>Standard</option>
+                      <option value="photolocation" ${w.waypoint_type === "photolocation" ? "selected" : ""}>Photolocation</option>
+                      <option value="parking" ${w.waypoint_type === "parking" ? "selected" : ""}>Parking place</option>
+                    </select>
+                  </td>
                   <td>${w.location_name || "None"}</td>
                   <td>${new Date(w.created_at).toLocaleString()}</td>
                   <td><button onclick="deleteWaypoint(${w.id})">Delete</button></td>
@@ -179,6 +196,24 @@ app.get("/", async (req, res) => {
               alert('Network error: ' + error.message);
             }
           });
+
+          async function updateWaypointType(id, waypointType) {
+            try {
+              const response = await fetch('/api/waypoints/' + id + '/type', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ waypoint_type: waypointType })
+              });
+              if (!response.ok) {
+                const error = await response.json();
+                alert('Error: ' + error.message);
+                window.location.reload();
+              }
+            } catch (error) {
+              alert('Network error: ' + error.message);
+              window.location.reload();
+            }
+          }
 
           document.getElementById('hierarchyForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -300,6 +335,18 @@ app.get("/api/waypoints/:id", async (req, res) => {
 app.put("/api/waypoints/:id", async (req, res) => {
   try {
     const waypoint = await waypointModel.update(req.params.id, req.body);
+    res.json(waypoint);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+app.patch("/api/waypoints/:id/type", async (req, res) => {
+  try {
+    const waypoint = await waypointModel.updateWaypointType(req.params.id, req.body.waypoint_type);
+    if (!waypoint) {
+      return res.status(404).json({ message: "Waypoint not found" });
+    }
     res.json(waypoint);
   } catch (error) {
     res.status(400).json({ message: error.message });

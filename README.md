@@ -7,6 +7,7 @@ A Node.js and Express application for managing GPS waypoints in MariaDB and expo
 - Create, view, update, and delete waypoints
 - Organize waypoints in a parent-child location hierarchy
 - Create locations from the web page, including nested locations
+- Mark waypoints as photo locations or parking places, including existing records
 - Keep the most recently selected location in the current browser
 - Export waypoints as a ZIP for Topo GPS
 - Enter latitude and longitude side by side on wider screens
@@ -27,7 +28,7 @@ Ensure the external network exists. If SharedDB has not already created it, crea
 docker network create shared_wp_net
 ```
 
-Copy `.env.example` to `.env` if needed, then set the database credentials and deployment settings. Compose reads `.env` and passes the same values to the app. The real `.env` is ignored by Git; do not commit credentials.
+Create `.env` in the project root and set the database credentials and deployment settings. Compose reads `.env` and passes the same values to the app. The real `.env` is ignored by Git; do not commit credentials.
 
 Start or rebuild the application:
 
@@ -92,7 +93,7 @@ npm run dev
 
 ## Database
 
-Set `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` in `.env` to configure the MariaDB connection. The database itself must exist before startup. On startup, the app runs `src/database/schema.js` to create missing tables. The hierarchy table is named `location_hierarchies` (plural); waypoint records refer to it through `location_hierarchy_id`.
+Set `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` in `.env` to configure the MariaDB connection. The database itself must exist before startup. Waypoint types are stored in the existing `waypoint_metadata` table under the `waypoint_type` key. Records without that metadata default to `standard`, so no new column or migration is needed. The hierarchy table is named `location_hierarchies` (plural); waypoint records refer to it through `location_hierarchy_id`.
 
 The schema contains:
 
@@ -106,18 +107,19 @@ Existing tables are not migrated by `CREATE TABLE IF NOT EXISTS`. Back up the da
 
 The home page lets you add waypoints, create top-level or nested locations, browse waypoints, and download a ZIP export. The selected location is remembered in browser `localStorage`.
 
-The export ZIP encodes the location hierarchy as nested folders and names each location CSV after its leaf folder, for example `De Mooiste Fotolocaties/België.csv`. This avoids an extra `waypoints` subfolder during import. Import the ZIP itself into Topo GPS without extracting it; Topo GPS preserves folders found inside an imported ZIP. Waypoints without a location are placed in a root-level `waypoints.csv`. The archive also includes `waypoints.json` as a data copy and a `README.txt`.
+The export ZIP encodes the location hierarchy as nested folders and places one GPX file per location, named after its leaf folder, for example `De Mooiste Fotolocaties/België.gpx`. It defines Topo GPS waypoint styles in the GPX metadata and assigns each typed waypoint its `topogps:wptStyleID` reference. Photolocations use Topo GPS's `attraction` symbol (the camera-style icon); parking places use `parking`. Import the ZIP itself into Topo GPS without extracting it; Topo GPS preserves folders in imported ZIPs. Waypoints without a location are placed in a root-level `waypoints.gpx`. The archive also includes `waypoints.json` and a `README.txt`.
 
-| Method   | Endpoint               | Purpose                                                                                    |
-| -------- | ---------------------- | ------------------------------------------------------------------------------------------ |
-| `GET`    | `/api/waypoints`       | List waypoints                                                                             |
-| `GET`    | `/api/waypoints/:id`   | Get one waypoint                                                                           |
-| `POST`   | `/api/waypoints`       | Create a waypoint                                                                          |
-| `PUT`    | `/api/waypoints/:id`   | Update a waypoint                                                                          |
-| `DELETE` | `/api/waypoints/:id`   | Delete a waypoint                                                                          |
-| `POST`   | `/api/hierarchies`     | Create a location; JSON body: `{"name":"Area","parent_id":null}`. `parent_id` is optional. |
-| `GET`    | `/api/export/zip`      | Download the Topo GPS ZIP export                                                           |
-| `GET`    | `/api/export/zip/file` | Generate a ZIP file on the server and return its path                                      |
+| Method   | Endpoint                  | Purpose                                                                                    |
+| -------- | ------------------------- | ------------------------------------------------------------------------------------------ |
+| `GET`    | `/api/waypoints`          | List waypoints                                                                             |
+| `GET`    | `/api/waypoints/:id`      | Get one waypoint                                                                           |
+| `POST`   | `/api/waypoints`          | Create a waypoint                                                                          |
+| `PUT`    | `/api/waypoints/:id`      | Update a waypoint                                                                          |
+| `PATCH`  | `/api/waypoints/:id/type` | Change an existing waypoint's type (`standard`, `photolocation`, or `parking`)             |
+| `DELETE` | `/api/waypoints/:id`      | Delete a waypoint                                                                          |
+| `POST`   | `/api/hierarchies`        | Create a location; JSON body: `{"name":"Area","parent_id":null}`. `parent_id` is optional. |
+| `GET`    | `/api/export/zip`         | Download the Topo GPS ZIP export                                                           |
+| `GET`    | `/api/export/zip/file`    | Generate a ZIP file on the server and return its path                                      |
 
 ## Troubleshooting
 

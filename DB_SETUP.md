@@ -12,9 +12,9 @@ The application reads its database connection settings from `.env`:
 | User     | `DB_USER`     |
 | Password | `DB_PASSWORD` |
 
-Copy `.env.example` to `.env` and set the values for your MariaDB server. The MariaDB server must be reachable from the app container. In Docker, the app joins the external network named by `DOCKER_NETWORK` (default: `shared_wp_net`).
+Create `.env` in the project root and set the values for your MariaDB server. The MariaDB server must be reachable from the app container. In Docker, the app joins the external network named by `DOCKER_NETWORK` (default: `shared_wp_net`).
 
-Compose reads `.env` for its port, network, and container-name settings and passes the file into the app container. The Node configuration loads the same `.env` for local commands such as `npm start` and `npm run init`. Keep actual credentials in `.env`; it is excluded from Git. Use `.env.example` as the shareable template.
+Compose reads `.env` for its port, network, and container-name settings and passes the file into the app container. The Node configuration loads the same `.env` for local commands such as `npm start` and `npm run init`. Create `.env` locally using the settings above, keep actual credentials there, and do not commit it to Git.
 
 ## Create the database and user
 
@@ -33,7 +33,7 @@ FLUSH PRIVILEGES;
 
 If the account already exists with a different password, update it separately with `ALTER USER` and ensure the application configuration matches.
 
-The database must be created before starting the app. The app creates missing tables at startup using `src/database/schema.js`; it does not create the database or migrate existing tables.
+The database must be created before starting the app. The app creates missing tables at startup using `src/database/schema.js`; it does not create the database. Waypoint types use the existing `waypoint_metadata` table with `meta_key = 'waypoint_type'` and values `standard`, `photolocation`, or `parking`. Existing records without this metadata are treated as `standard`; no table migration or `ALTER` privilege is needed.
 
 ## Tables and relationships
 
@@ -41,7 +41,7 @@ The active JavaScript schema creates these tables:
 
 - `location_hierarchies`: location names, parent IDs, and hierarchy levels
 - `waypoints`: coordinates and optional `location_hierarchy_id` referencing `location_hierarchies.id`
-- `waypoint_metadata`: metadata using the columns `meta_key` and `meta_value`
+- `waypoint_metadata`: metadata using `meta_key` and `meta_value`; waypoint categories use `meta_key = 'waypoint_type'`
 
 Use the plural table name `location_hierarchies`. The application joins against that name. `CREATE TABLE IF NOT EXISTS` does not repair a table with an old or incompatible structure; back up the database before making manual changes.
 
