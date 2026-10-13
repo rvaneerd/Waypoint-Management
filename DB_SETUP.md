@@ -18,15 +18,15 @@ Compose reads `.env` for its port, network, and container-name settings and pass
 
 ## Create the database and user
 
-Run the following as a MariaDB administrator on the SharedDB server, or through its database administration tool. The example account/password must match `DB_USER` and `DB_PASSWORD` in your `.env`; replace them if you use different credentials:
+Before running the SQL below, open `.env` and replace every placeholder with the corresponding actual value from `DB_NAME`, `DB_USER`, and `DB_PASSWORD`. Do not use the placeholder text literally. Run the SQL as a MariaDB administrator on the SharedDB server, or through its database administration tool:
 
 ```sql
-CREATE DATABASE IF NOT EXISTS waypoints;
+CREATE DATABASE IF NOT EXISTS `<DB_NAME>`;
 
-CREATE USER IF NOT EXISTS 'wpuser'@'%' IDENTIFIED BY 'wppassword';
+CREATE USER IF NOT EXISTS '<DB_USER>'@'%' IDENTIFIED BY '<DB_PASSWORD>';
 
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, REFERENCES
-	ON waypoints.* TO 'wpuser'@'%';
+  ON `<DB_NAME>`.* TO '<DB_USER>'@'%';
 
 FLUSH PRIVILEGES;
 ```
