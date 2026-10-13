@@ -29,7 +29,7 @@ app.get("/", async (req, res) => {
           body { font-family: Arial, sans-serif; margin: 20px; }
           .container { max-width: 1200px; margin: 0 auto; }
           .form-group { margin-bottom: 15px; }
-          .coordinate-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+          .coordinate-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 12px; }
           label { display: block; margin-bottom: 5px; font-weight: bold; }
           input, textarea, select { width: 100%; padding: 8px; box-sizing: border-box; }
           button { background: #007bff; color: white; padding: 10px 20px; border: none; cursor: pointer; }
@@ -54,12 +54,28 @@ app.get("/", async (req, res) => {
             <div class="coordinate-row">
               <div class="form-group">
                 <label for="latitude">Latitude:</label>
-                <input type="number" id="latitude" name="latitude" step="any" required>
+                <input type="text" id="latitude" name="latitude" inputmode="decimal" autocomplete="off" maxlength="10" placeholder="51.123456" pattern="-?[0-9]{1,2}[.][0-9]{6}" required>
               </div>
               <div class="form-group">
                 <label for="longitude">Longitude:</label>
-                <input type="number" id="longitude" name="longitude" step="any" required>
+                <input type="text" id="longitude" name="longitude" inputmode="decimal" autocomplete="off" maxlength="10" placeholder="5.123456" pattern="-?[0-9]{1,2}[.][0-9]{6}" required>
               </div>
+              <div class="form-group">
+                <label for="waypoint_type">Waypoint type:</label>
+                <select id="waypoint_type" name="waypoint_type" disabled>
+                  <option value="standard">Standard</option>
+                  <option value="photolocation">Photolocation</option>
+                  <option value="parking">Parking place</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="location_hierarchy_id">Location Hierarchy:</label>
+              <select id="location_hierarchy_id" name="location_hierarchy_id" disabled>
+                <option value="">Select a location</option>
+                ${hierarchies.map((h) => `<option value="${h.id}">${"— ".repeat(h.level)}${h.name}</option>`).join("")}
+              </select>
             </div>
             
             <div class="form-group">
@@ -72,23 +88,6 @@ app.get("/", async (req, res) => {
               <input type="url" id="reference_url" name="reference_url">
             </div>
 
-            <div class="form-group">
-              <label for="waypoint_type">Waypoint type:</label>
-              <select id="waypoint_type" name="waypoint_type">
-                <option value="standard">Standard</option>
-                <option value="photolocation">Photolocation</option>
-                <option value="parking">Parking place</option>
-              </select>
-            </div>
-            
-            <div class="form-group">
-              <label for="location_hierarchy_id">Location Hierarchy:</label>
-              <select id="location_hierarchy_id" name="location_hierarchy_id">
-                <option value="">Select a location</option>
-                ${hierarchies.map((h) => `<option value="${h.id}">${"— ".repeat(h.level)}${h.name}</option>`).join("")}
-              </select>
-            </div>
-            
             <button type="submit">Add Waypoint</button>
           </form>
 
@@ -154,6 +153,64 @@ app.get("/", async (req, res) => {
         
         <script>
           const locationSelect = document.getElementById('location_hierarchy_id');
+          const waypointTypeSelect = document.getElementById('waypoint_type');
+          const latitudeInput = document.getElementById('latitude');
+          const longitudeInput = document.getElementById('longitude');
+
+          function normalizeDecimalSeparator(input) {
+            if (!input.value.includes(',')) {
+              return;
+            }
+
+            const cursor = input.selectionStart ?? input.value.length;
+            input.value = input.value.replace(/,/g, '.');
+            input.setSelectionRange(cursor, cursor);
+          }
+
+          function validateCoordinate(input, min, max) {
+            const value = input.value.trim();
+            const matchesFormat = /^-?[0-9]{1,2}[.][0-9]{6}$/.test(value);
+            const numericValue = Number(value);
+            const isValid = matchesFormat && numericValue >= min && numericValue <= max;
+            input.setCustomValidity(isValid || value === '' ? '' : 'Use decimal degrees with six decimals, for example 51.123456.');
+            return isValid;
+          }
+
+          function updateLocationAvailability() {
+            const latitudeValid = validateCoordinate(latitudeInput, -90, 90);
+            const longitudeValid = validateCoordinate(longitudeInput, -180, 180);
+            const coordinatesValid = latitudeValid && longitudeValid;
+            locationSelect.disabled = !coordinatesValid;
+            waypointTypeSelect.disabled = !coordinatesValid;
+            return coordinatesValid;
+          }
+
+          function focusNextAfterInput(currentInput, nextInput, isValid) {
+            requestAnimationFrame(() => {
+              if (document.activeElement === currentInput && isValid()) {
+                nextInput.focus();
+              }
+            });
+          }
+
+          latitudeInput.addEventListener('input', function() {
+            normalizeDecimalSeparator(this);
+            const isValid = validateCoordinate(this, -90, 90);
+            updateLocationAvailability();
+            if (isValid) {
+              focusNextAfterInput(this, longitudeInput, () => validateCoordinate(latitudeInput, -90, 90));
+            }
+          });
+
+          longitudeInput.addEventListener('input', function() {
+            normalizeDecimalSeparator(this);
+            validateCoordinate(this, -180, 180);
+            if (updateLocationAvailability()) {
+              focusNextAfterInput(this, waypointTypeSelect, updateLocationAvailability);
+            }
+          });
+
+          updateLocationAvailability();
           const savedLocationId = localStorage.getItem('waypoint-last-location');
           if (savedLocationId && Array.from(locationSelect.options).some((option) => option.value === savedLocationId)) {
             locationSelect.value = savedLocationId;
@@ -182,6 +239,7 @@ app.get("/", async (req, res) => {
               if (response.ok) {
                 alert('Waypoint added successfully!');
                 this.reset();
+                updateLocationAvailability();
                 locationSelect.value = selectedLocationId;
                 if (selectedLocationId) {
                   localStorage.setItem('waypoint-last-location', selectedLocationId);
